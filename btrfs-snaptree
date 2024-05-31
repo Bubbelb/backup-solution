@@ -1,0 +1,31 @@
+#!/bin/bash
+MNT_PATH=/tmp/dockdisk
+SRC_SUBV=current
+DST_SUBV=snapshot
+
+# Remove old subvolume set
+if [[ -d "${MNT_PATH}/${DST_SUBV}" ]] ; then
+    btrfs subvolume list --sort=-path "${MNT_PATH}" | sed 's/ID \S\+ gen \S\+ top level \S\+ path //' | grep -x "${DST_SUBV}\(/.*\)\?" | xargs btrfs subv del -c
+fi
+
+# Create Snapshot tree
+declare -a volume_list
+mapfile -t volume_list < <( btrfs subvolume list --sort=path "${MNT_PATH}" \
+                                | sed 's/ID \S\+ gen \S\+ top level \S\+ path //' \
+                                | grep -x "${SRC_SUBV}\(/.*\)\?" )
+
+for src_vol in "${volume_list[@]}" ; do
+    if [[ ${src_vol} == ${src_vol#*/} ]] ; then
+        dst_vol="${DST_SUBV}"
+    else
+        dst_vol="${DST_SUBV}/${src_vol#*/}"
+    fi
+
+    if [[ -d "${MNT_PATH}/${dst_vol}" ]] ; then
+        rmdir --ignore-fail-on-non-empty "${MNT_PATH}/${dst_vol}"
+    fi
+
+    btrfs subvolume snapshot "${MNT_PATH}/${src_vol}" "${MNT_PATH}/${dst_vol}"
+done
+
+
